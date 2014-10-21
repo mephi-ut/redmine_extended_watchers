@@ -55,6 +55,9 @@ module ExtendedWatchersIssuePatch
 
     module InstanceMethods
         def visible_with_extwatch?(usr=nil)
+          visible = visible_without_extwatch?(usr)
+          return true if visible
+
           visible = (usr || User.current).allowed_to?(:view_issues, self.project, {:watchers => false }) do |role, user|
             if user.logged?
               case role.issues_visibility
@@ -64,11 +67,7 @@ module ExtendedWatchersIssuePatch
                 !self.is_private? || (self.author == user || self.watched_by?(user) || user.is_or_belongs_to?(assigned_to))
               when 'own'
                 self.author == user || self.watched_by?(user) || user.is_or_belongs_to?(assigned_to)
-              else
-                visible_without_extwatch?(usr)
               end
-            else
-              visible_without_extwatch?(usr)
             end
           end
 

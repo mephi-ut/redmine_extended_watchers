@@ -1,10 +1,11 @@
 require_dependency 'issue'
 
 module ExtendedWatchersIssuePatch
-    
+
     def self.included(base)
         base.extend(ClassMethods)
         base.send(:include, InstanceMethods)
+        base.extend ClassMethods
         base.class_eval do
             unloadable
 
@@ -20,9 +21,8 @@ module ExtendedWatchersIssuePatch
 
         watched_issues = []
         if user.logged?
-          user_ids = [user.id] + user.groups.map(&:id)
+          user_ids = [user.id] + user.groups.map(&:id).compact
           watched_issues = Issue.watched_by(user).joins(:project => :enabled_modules).where("#{EnabledModule.table_name}.name = 'issue_tracking'").map(&:id)
-
         end
 
         prj_clause = options.nil? || options[:project].nil? ? nil : " #{Project.table_name}.id = #{options[:project].id}"
@@ -31,32 +31,18 @@ module ExtendedWatchersIssuePatch
         watched_group_issues_clause <<  " OR #{table_name}.id IN (#{watched_issues.join(',')})" <<
             (prj_clause.nil? ? "" : " AND ( #{prj_clause} )") unless watched_issues.empty?
 
-        watched_issues_clause = watched_issues.empty? ? "" : " OR #{table_name}.id IN (#{watched_issues.join(',')})"
-        return "(#{visible_condition_without_extwatch(user, options)}) #{watched_issues_clause} #{watched_group_issues_clause}";
+        "( " + visible_condition_without_extwatch(user, options) + "#{watched_group_issues_clause}) "
+
       end
     end
 
     module InstanceMethods
         def visible_with_extwatch?(usr=nil)
-          visible = (usr || User.current).allowed_to?(:view_issues, self.project, {:watchers => false }) do |role, user|
-            if user.logged?
-              case role.issues_visibility
-              when 'all'
-                true
-              when 'default'
-                !self.is_private? || (self.author == user || self.watched_by?(user) || user.is_or_belongs_to?(assigned_to))
-              when 'own'
-                self.author == user || self.watched_by?(user) || user.is_or_belongs_to?(assigned_to)
-              else
-                visible_without_extwatch?(usr)
-              end
-            else
-              visible_without_extwatch?(usr)
-            end
-          end
+          visible = visible_without_extwatch?(usr)
+          return true if visible
 
-          if !visible && (usr || User.current).logged?
-            visible = self.watched_by?(usr || User.current)
+          if (usr || User.current).logged?
+            visible =  self.watched_by?(usr)
           end
 
           logger.error "visible_with_extwatch #{User.current.name} #{visible}"

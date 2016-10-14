@@ -59,7 +59,7 @@ module ExtendedWatchersIssuePatch
             visible = self.watched_by?(usr || User.current)
           end
 
-          logger.error "visible_with_extwatch #{visible}"
+          logger.error "visible_with_extwatch #{User.current.name} #{visible}"
           visible
         end
 
